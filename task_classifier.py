@@ -43,7 +43,7 @@ llm = ChatGoogleGenerativeAI(
 # =====================
 # Streamlit App Layout
 # =====================
-st.set_page_config(page_title="🤖 Multimodal AI App", page_icon="🤖", layout="centered")
+st.set_page_config(page_title="🤖Sanjoy, Multimodal AI App", page_icon="🤖", layout="centered")
 st.title("🤖 Multimodal AI App (Text + Image Generator + Image Q&A + Voice Input)")
 
 tab1, tab2, tab3 = st.tabs(["💬 Text & Voice Chat", "🎨 Image Generator", "🖼️ Image Q&A"])
@@ -70,7 +70,7 @@ with tab1:
             "who built this agent", "who created this agent", "who made this agent",
             "who is the developer", "who is the creator"
         ]):
-            return "This agent was built by **Sounak Sarkar**."
+            return "This agent was built by **Sanjoy Bhattacharjee**."
     
         prompt = compose_prompt(conversation, query)
     
@@ -258,3 +258,4 @@ with tab3:
                 for chunk in llm.stream([HumanMessage(content=content)]):
                     final_response += chunk.content or ""
                     response_placeholder.markdown(f"**Answer (streaming):**\n\n{final_response}")
+
