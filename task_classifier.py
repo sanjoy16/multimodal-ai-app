@@ -7,8 +7,6 @@ import streamlit as st
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.schema import HumanMessage
-from audio_recorder_streamlit import audio_recorder  # 🎙️ for mic input
-import wave   
 
 # =====================
 # Load environment variables
@@ -16,7 +14,6 @@ import wave
 load_dotenv()
 google_api_key = st.secrets.get("GOOGLE_API_KEY", os.getenv("GOOGLE_API_KEY"))
 pollinations_token = st.secrets.get("POLLINATIONS_TOKEN", os.getenv("POLLINATIONS_TOKEN"))
-gladia_api_key = st.secrets.get("GLADIA_API_KEY", os.getenv("GLADIA_API_KEY"))
 
 if not google_api_key:
     st.error("❌ GOOGLE_API_KEY not found! Please set it in .env or Streamlit Secrets.")
@@ -26,15 +23,11 @@ if not pollinations_token:
     st.error("❌ POLLINATIONS_TOKEN not found! Please set it in .env or Streamlit Secrets.")
     st.stop()
 
-if not gladia_api_key:
-    st.error("❌ GLADIA_API_KEY not found! Please set it in .env or Streamlit Secrets.")
-    st.stop()
-
 # =====================
-# Initialize Gemini LLM
+# Initialize Gemini LLM (⚡ streaming mode)
 # =====================
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
+    model="gemini-2.5-flash",  # pro supports multimodality (text + image)
     temperature=0,
     google_api_key=google_api_key,
     streaming=True
@@ -44,15 +37,15 @@ llm = ChatGoogleGenerativeAI(
 # Streamlit App Layout
 # =====================
 st.set_page_config(page_title="🤖 Multimodal AI App", page_icon="🤖", layout="centered")
-st.title("🤖 Multimodal AI App (Text + Image Generator + Image Q&A + Voice Input)")
+st.title("🤖 Multimodal AI App (Text + Image Generator + Image Q&A)")
 
-tab1, tab2, tab3 = st.tabs(["💬 Text & Voice Chat", "🎨 Image Generator", "🖼️ Image Q&A"])
+tab1, tab2, tab3 = st.tabs(["💬 Text Chat", "🎨 Image Generator", "🖼️ Image Q&A"])
 
 # =====================
-# TEXT + VOICE CHAT TAB
+# TEXT CHAT TAB
 # =====================
 with tab1:
-    st.subheader("⚡ Fast Text + Voice Task Classifier & Gemini Chat")
+    st.subheader("⚡ Fast Text Task Classifier & Gemini Chat")
 
     if "conversation" not in st.session_state:
         st.session_state.conversation = []
@@ -70,7 +63,7 @@ with tab1:
             "who built this agent", "who created this agent", "who made this agent",
             "who is the developer", "who is the creator"
         ]):
-            return "This agent was built by **Sounak Sarkar**."
+            return "This agent was built by **AI **."
 
         prompt = compose_prompt(conversation, query)
 
@@ -83,82 +76,8 @@ with tab1:
 
         return final_response
 
-    # =====================
-    # 🎙️ Voice Input + Text Input Section
-    # =====================
     query = st.text_input("💬 Enter your request:", key="input_query")
 
-    # Record voice (audio_recorder creates mic button)
-    st.write("🎙️ Speak your query below (up to 30 seconds):")
-    audio_bytes = audio_recorder(
-        text="Click to start/stop recording",
-        recording_color="#FF4B4B",
-        neutral_color="#4B9EFF",
-        icon_size="2x",  # Larger mic button
-        energy_threshold=(-1.0, 1.0)
-    )
-
-    if audio_bytes:
-        st.audio(audio_bytes, format="audio/wav")
-        tmp_path = "temp_audio.wav"
-        with open(tmp_path, "wb") as f:
-            f.write(audio_bytes)
-
-        with wave.open(tmp_path, "rb") as wf:
-            frames = wf.getnframes()
-            rate = wf.getframerate()
-            duration = frames / float(rate)
-
-        if duration < 2:
-            st.warning("⚠️ Your recording was too short — please record for at least 2 seconds.")
-        else:
-            with st.spinner("🎧 Transcribing your voice..."):
-                files = {'audio': ("voice.wav", audio_bytes, "audio/wav")}
-                headers = {"x-gladia-key": gladia_api_key}
-                response = requests.post(
-                    "https://api.gladia.io/audio/text/audio-transcription/",
-                    headers=headers,
-                    files=files
-                )
-
-                if response.status_code == 200:
-                    result_json = response.json()
-                    text_result = ""
-
-                    # ✅ SAFELY extract transcription
-                    if isinstance(result_json, dict):
-                        if "transcription" in result_json:
-                            text_result = result_json["transcription"]
-                        elif "result" in result_json and isinstance(result_json["result"], list):
-                            for item in result_json["result"]:
-                                if isinstance(item, dict) and "transcription" in item:
-                                    text_result = item["transcription"]
-                                    break
-                        elif "prediction" in result_json:
-                            text_result = result_json["prediction"]
-                    elif isinstance(result_json, list):
-                        for item in result_json:
-                            if isinstance(item, dict) and "transcription" in item:
-                                text_result = item["transcription"]
-                                break
-
-                    # ✅ Normalize to string
-                    if isinstance(text_result, list):
-                        text_result = " ".join(str(x) for x in text_result)
-                    if isinstance(text_result, dict):
-                        text_result = text_result.get("transcription", "")
-
-                    if isinstance(text_result, str) and text_result.strip():
-                        st.success(f"🗣️ You said: {text_result}")
-                        query = text_result.strip()
-                        ans = handle_text_task(st.session_state.conversation, query)
-                        st.session_state.conversation.append((query, ans))
-                    else:
-                        st.warning("⚠️ Couldn't extract valid text from the API response.")
-                else:
-                    st.error(f"❌ Gladia API Error: {response.text}")
-
-    
     col1, col2 = st.columns([1, 3])
     with col1:
         process_clicked = st.button("Process")
@@ -181,20 +100,28 @@ with tab1:
 
 # =====================
 # IMAGE GENERATOR TAB
+# =====================# =====================
+# IMAGE GENERATOR TAB (with auto-enhancement + styles)
+# =====================
+# =====================
+# IMAGE GENERATOR TAB (Gemini-enhanced + Faster Caching)
 # =====================
 with tab2:
     st.subheader("🎨 Pollinations.AI Free Image Generator")
 
     img_prompt = st.text_input("📝 Enter your image prompt:", key="img_prompt")
 
+    # Style options
     styles = ["Realistic", "Cartoon", "Fantasy", "Minimalist"]
     selected_style = st.radio("🎨 Choose a style:", styles, horizontal=True)
 
+    # Function: Ask Gemini to expand + improve the prompt
     def smart_enhance_prompt(user_prompt, style):
         quick_prompt = f"Rewrite this short prompt into a detailed {style} image generation description: {user_prompt}"
-        response = llm.invoke(quick_prompt)
+        response = llm.invoke(quick_prompt)  # using Gemini directly
         return response.content.strip()
 
+    # Function: cache Pollinations image fetch for speed
     @st.cache_data(show_spinner=False)
     def fetch_image(final_prompt, token):
         url = f"https://image.pollinations.ai/prompt/{final_prompt}?token={token}"
@@ -205,7 +132,10 @@ with tab2:
             st.warning("⚠️ Please enter a prompt before generating an image.")
         else:
             with st.spinner(f"🎨 Generating {selected_style} image..."):
+                # Auto-enhance the prompt using Gemini
                 final_prompt = smart_enhance_prompt(img_prompt, selected_style)
+
+                # Fetch image (cached if repeated)
                 try:
                     img_bytes = fetch_image(final_prompt, pollinations_token)
                     img = Image.open(BytesIO(img_bytes))
@@ -222,8 +152,9 @@ with tab2:
                 except Exception as e:
                     st.error(f"❌ Failed to generate image: {e}")
 
+
 # =====================
-# IMAGE Q&A TAB
+# IMAGE Q&A TAB (FIXED with base64 encoding)
 # =====================
 with tab3:
     st.subheader("🖼️ Upload an Image & Ask Gemini")
@@ -238,6 +169,7 @@ with tab3:
             st.warning("⚠️ Please enter a question about the image.")
         else:
             with st.spinner("🔎 Analyzing image..."):
+                # ✅ Proper base64 encoding
                 img_bytes = uploaded_img.read()
                 img_base64 = base64.b64encode(img_bytes).decode("utf-8")
                 data_url = f"data:image/png;base64,{img_base64}"
